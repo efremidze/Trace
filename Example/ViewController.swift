@@ -7,23 +7,40 @@
 //
 
 import UIKit
+import UIKit.UIGestureRecognizerSubclass
 
 class ViewController: UIViewController {
-
+    
+    @IBOutlet var drawView: DrawView! {
+        didSet {
+            drawView.backgroundColor = .clear
+        }
+    }
+    
+    var gesture: CheckmarkGestureRecognizer!
+    
     override func viewDidLoad() {
         super.viewDidLoad()
-        // Do any additional setup after loading the view, typically from a nib.
+        
+        gesture = CheckmarkGestureRecognizer(target: self, action: #selector(handleGesture))
+        view.addGestureRecognizer(gesture)
     }
-
-    override func didReceiveMemoryWarning() {
-        super.didReceiveMemoryWarning()
-        // Dispose of any resources that can be recreated.
+    
+    @objc func handleGesture(_ r: CheckmarkGestureRecognizer) {
+//        if r.state == .ended {
+//            findCircledView(c.fitResult.center)
+//        }
+//        print(r.state.rawValue)
+        drawView.points = r.samples.map { $0.location }
+        switch r.state {
+        case .began:
+            break
+        default:
+            break
+        }
     }
-
-
+    
 }
-
-// Custom Gesture Framework
 
 enum CheckmarkPhases {
     case notStarted
@@ -32,135 +49,241 @@ enum CheckmarkPhases {
     case upStroke
 }
 
-class CheckmarkGestureRecognizer : UIGestureRecognizer {
-    var strokePhase : CheckmarkPhases = .notStarted
-    var initialTouchPoint : CGPoint = CGPoint.zero
-    var trackedTouch : UITouch? = nil
+struct StrokeSample {
+    let location: CGPoint
 }
 
-//override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
-//    super.touchesBegan(touches, with: event)
-//    if touches.count != 1 {
-//        self.state = .failed
-//    }
+class CheckmarkGestureRecognizer: UIGestureRecognizer {
+//    var strokePhase: CheckmarkPhases = .notStarted
+//    var initialTouchPoint: CGPoint = .zero
+//    var touchedPoints = [CGPoint]()
+//    var path = CGMutablePath()
+    
+    var trackedTouch: UITouch?
+    var samples = [StrokeSample]()
+    
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+        if touches.count != 1 {
+            self.state = .failed
+        }
+        
+        // Capture the first touch and store some information about it.
+        if self.trackedTouch == nil {
+            if let firstTouch = touches.first {
+                self.trackedTouch = firstTouch
+                self.addSample(for: firstTouch)
+                state = .began
+            }
+        } else {
+            // Ignore all but the first touch.
+            for touch in touches {
+                if touch != self.trackedTouch {
+                    self.ignore(touch, for: event)
+                }
+            }
+        }
+    }
+    
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        self.addSample(for: touches.first!)
+        state = .changed
+    }
+    
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        self.addSample(for: touches.first!)
+        state = .ended
+    }
+    
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        self.samples.removeAll()
+        state = .cancelled
+    }
+    
+    override func reset() {
+        self.samples.removeAll()
+        self.trackedTouch = nil
+    }
+    
+    func addSample(for touch: UITouch) {
+        let newSample = StrokeSample(location: touch.location(in: self.view))
+        self.samples.append(newSample)
+    }
+    
+//    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+//        super.touchesBegan(touches, with: event)
 //
-//    // Capture the first touch and store some information about it.
-//    if self.trackedTouch == nil {
-//        self.trackedTouch = touches.first
-//        self.strokePhase = .initialPoint
-//        self.initialTouchPoint = (self.trackedTouch?.location(in: self.view))!
-//    } else {
-//        // Ignore all but the first touch.
-//        for touch in touches {
-//            if touch != self.trackedTouch {
-//                self.ignore(touch, for: event)
-//            }
-//        }
-//    }
-//}
+//        print(self.strokePhase)
 //
-//override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
-//    super.touchesMoved(touches, with: event)
-//    let newTouch = touches.first
-//    // There should be only the first touch.
-//    guard newTouch == self.trackedTouch else {
-//        self.state = .failed
-//        return
-//    }
-//    let newPoint = (newTouch?.location(in: self.view))!
-//    let previousPoint = (newTouch?.previousLocation(in: self.view))!
-//    if self.strokePhase == .initialPoint {
-//        // Make sure the initial movement is down and to the right.
-//        if newPoint.x >= initialTouchPoint.x && newPoint.y >= initialTouchPoint.y {
-//            self.strokePhase = .downStroke
-//        } else {         self.state = .failed
+//        if touches.count != 1 {
+//            self.state = .failed
 //        }
-//    } else if self.strokePhase == .downStroke {
-//        // Always keep moving left to right.
-//        if newPoint.x >= previousPoint.x {
-//            // If the y direction changes, the gesture is moving up again.
-//            // Otherwise, the down stroke continues.
-//            if newPoint.y < previousPoint.y {
-//                self.strokePhase = .upStroke
-//            }
+//        self.state = .began
+//
+//        // Capture the first touch and store some information about it.
+//        if self.trackedTouch == nil {
+//            self.trackedTouch = touches.first
+//            self.strokePhase = .initialPoint
+//            self.initialTouchPoint = (self.trackedTouch?.location(in: self.view))!
+//
+//            let point = trackedTouch!.location(in: self.view)
+//            touchedPoints.append(point)
+//            path.move(to: point)
 //        } else {
-//            // If the new x value is to the left, the gesture fails.
-//            self.state = .failed
-//        }
-//    } else if self.strokePhase == .upStroke {
-//        // If the new x value is to the left, or the new y value
-//        // changed directions again, the gesture fails.]
-//        if newPoint.x < previousPoint.x || newPoint.y > previousPoint.y {
-//            self.state = .failed
+//            // Ignore all but the first touch.
+//            for touch in touches {
+//                if touch != self.trackedTouch {
+//                    self.ignore(touch, for: event)
+//                }
+//            }
 //        }
 //    }
-//}
 //
-//override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
-//    super.touchesEnded(touches, with: event)
-//    let newTouch = touches.first
-//    let newPoint = (newTouch?.location(in: self.view))!
-//    // There should be only the first touch.
-//    guard newTouch == self.trackedTouch else {
-//        self.state = .failed
-//        return
+//    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
+//        super.touchesMoved(touches, with: event)
+//
+//        print(self.strokePhase)
+//
+//        let newTouch = touches.first
+//        // There should be only the first touch.
+//        guard newTouch == self.trackedTouch else {
+//            self.state = .failed
+//            return
+//        }
+//        let newPoint = (newTouch?.location(in: self.view))!
+//        let previousPoint = (newTouch?.previousLocation(in: self.view))!
+//
+//        if self.strokePhase == .initialPoint {
+//            // Make sure the initial movement is down and to the right.
+//            if newPoint.x >= initialTouchPoint.x && newPoint.y >= initialTouchPoint.y {
+//                self.strokePhase = .downStroke
+//
+//                touchedPoints.append(newPoint)
+//                path.addLine(to: newPoint)
+//                self.state = .changed
+//            } else {
+//                self.state = .failed
+//            }
+//        } else if self.strokePhase == .downStroke {
+//            // Always keep moving left to right.
+//            if newPoint.x >= previousPoint.x {
+//                // If the y direction changes, the gesture is moving up again.
+//                // Otherwise, the down stroke continues.
+//                if newPoint.y < previousPoint.y {
+//                    self.strokePhase = .upStroke
+//
+//                    touchedPoints.append(newPoint)
+//                    path.addLine(to: newPoint)
+//                    self.state = .changed
+//                }
+//            } else {
+//                // If the new x value is to the left, the gesture fails.
+//                self.state = .failed
+//            }
+//        } else if self.strokePhase == .upStroke {
+//            // If the new x value is to the left, or the new y value
+//            // changed directions again, the gesture fails.]
+//            if newPoint.x < previousPoint.x || newPoint.y > previousPoint.y {
+//                self.state = .failed
+//            } else {
+//                touchedPoints.append(newPoint)
+//                path.addLine(to: newPoint)
+//                self.state = .changed
+//            }
+//        }
 //    }
-//    // If the stroke was moving up and the final point is
-//    // above the initial point, the gesture succeeds.
-//    if self.state == .possible &&
-//        self.strokePhase == .upStroke &&
-//        newPoint.y < initialTouchPoint.y {
-//        self.state = .recognized
-//    } else {
-//        self.state = .failed
+//
+//    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
+//        super.touchesEnded(touches, with: event)
+//
+//        print(self.strokePhase)
+//        print(self.state.rawValue)
+//
+//        let newTouch = touches.first
+//        let newPoint = (newTouch?.location(in: self.view))!
+//        // There should be only the first touch.
+//        guard newTouch == self.trackedTouch else {
+//            self.state = .failed
+//            return
+//        }
+//
+//        // If the stroke was moving up and the final point is
+//        // above the initial point, the gesture succeeds.
+//        if self.state == .possible &&
+//            self.strokePhase == .upStroke &&
+//            newPoint.y < initialTouchPoint.y {
+//            self.state = .recognized
+//
+//            touchedPoints.append(newPoint)
+//            path.addLine(to: newPoint)
+//            self.state = .ended
+//        } else {
+//            self.state = .failed
+//        }
 //    }
-//}
 //
-//override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
-//    super.touchesCancelled(touches, with: event)
-//    self.initialTouchPoint = CGPoint.zero
-//    self.strokePhase = .notStarted
-//    self.trackedTouch = nil
-//    self.state = .cancelled
-//}
+//    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
+//        super.touchesCancelled(touches, with: event)
 //
-//override func reset() {
-//    super.reset()
-//    self.initialTouchPoint = CGPoint.zero
-//    self.strokePhase = .notStarted
-//    self.trackedTouch = nil
-//}
+//        print(self.strokePhase)
+//
+//        self.initialTouchPoint = CGPoint.zero
+//        self.strokePhase = .notStarted
+//        self.trackedTouch = nil
+//        self.touchedPoints = []
+//        self.path = CGMutablePath()
+//        self.state = .cancelled
+//    }
+//
+//    override func reset() {
+//        super.reset()
+//        self.initialTouchPoint = CGPoint.zero
+//        self.strokePhase = .notStarted
+//        self.trackedTouch = nil
+//        self.touchedPoints = []
+//        self.path = CGMutablePath()
+//    }
+}
 
-class Trace: UIView {
-    var pointsToDraw:[Int] = [] {
+// https://code.tutsplus.com/tutorials/smooth-freehand-drawing-on-ios--mobile-13164
+// https://github.com/Nicejinux/NXDrawKit/blob/master/NXDrawKit/Classes/Canvas.swift
+// https://github.com/IFTTT/jot/blob/master/jot/JotDrawView.m
+class DrawView: UIView {
+    var points = [CGPoint]() {
         didSet {
             self.setNeedsDisplay()
         }
     }
     
-    required init(coder aDecoder: NSCoder) {
-        super.init(coder: aDecoder)!
-        self.backgroundColor = .clear
-    }
-    
     override func draw(_ rect: CGRect) {
-        let context = UIGraphicsGetCurrentContext()
-        context!.clear(self.bounds)
-        context!.setLineWidth(10.0)
+        guard let context = UIGraphicsGetCurrentContext() else { return }
         
-        
-        if pointsToDraw.count > 4 {
-            
-            context?.move(to: CGPoint(x: CGFloat(pointsToDraw[0]), y: CGFloat(pointsToDraw[1])))
-            
-            for i in 2..<pointsToDraw.count {
-                if i % 2 == 0 {
-                    context?.addLine(to: CGPoint(x: CGFloat(pointsToDraw[i]), y: CGFloat(pointsToDraw[i + 1])))
+//        for point in points {
+//            if points.isEmpty {
+//                context.move(to: point)
+//            } else {
+//                context.addLine(to: point)
+//            }
+//        }
+        4
+        var temp = [CGPoint]()
+        for point in points {
+            if temp.isEmpty {
+                context.move(to: point)
+            }
+            temp.append(point)
+            if temp.count == 4 {
+                context.addCurve(to: temp[3], control1: temp[1], control2: temp[2])
+                temp = [point]
+            } else if point == points.last {
+                for point in temp {
+                    context.addLine(to: point)
                 }
             }
         }
-        
-        // Draw
-        context!.strokePath();
+        context.setStrokeColor(UIColor.green.cgColor)
+        context.setLineWidth(10)
+        context.setLineCap(.round)
+        context.setBlendMode(.normal)
+        context.strokePath()
     }
 }
